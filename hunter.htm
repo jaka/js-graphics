@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Hunter</title>
+  <style>
+  #canvas {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  canvas {
+    image-rendering: optimizeSpeed;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: -o-crisp-edges;
+    image-rendering: crisp-edges;
+    -ms-interpolation-mode: nearest-neighbor;
+  }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<script>
+window.requestAnimFrame = (function(callback) {
+  return window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame || function(callback) {window.setTimeout(callback, 1000 / 60);};
+})();
+</script>
+
+<script>
+
+  var width = window.innerWidth;
+  var maxSpeed = .01 * width;
+  var maxSprites = 10;
+
+  var misc = (function()
+  {
+    var f = {
+      chance: function(chanceInPercent) { return f.getRandom(0, 100) <= chanceInPercent; },
+      getRandomInt: function(min, max) { return Math.floor(f.getRandom(min, max + 1)); },
+      getRandom: function(min, max) { return Math.random() * (max - min) + min; }
+    };
+    return f;
+  })();
+
+  var display = (function(id, width)
+  {
+    var canvas = document.getElementById(id);
+    var q = window.innerHeight / window.innerWidth;
+    var height = Math.floor(q * width);
+    canvas.height = height;
+    canvas.width = width;
+    var r = {
+      ctx: canvas.getContext("2d"),
+      width: width,
+      height: height,
+      clear: function () { r.ctx.fillStyle = "#000"; r.ctx.fillRect(0, 0, r.width, r.height); }
+    };
+    return r;
+  })("canvas", width);
+
+  var fullCircle = Math.PI * 2;
+  var spacewidth = 0.5 * display.width;
+  var spaceheight = 0.5 * display.height;
+
+  var Speed = function()
+  {
+    this.speed = misc.getRandomInt(-maxSpeed, maxSpeed)
+    this.speedMax = maxSpeed;
+    this.speedStep = .1 * maxSpeed;
+  }
+
+  Speed.prototype.check = function()
+  {
+    if (this.speed > this.speedMax) {
+      this.speed = this.speedMax;
+    }
+    else if (this.speed < -this.speedMax) {
+      this.speed = -this.speedMax;
+    }
+  }
+
+  Speed.prototype.inc = function()
+  {
+    this.speed += this.speedStep;
+    if (this.speed > this.speedMax) {
+      this.speed = this.speedMax;
+    }
+  }
+
+  Speed.prototype.desc = function()
+  {
+    this.speed -= this.speedStep;
+    if (this.speed < -this.speedMax) {
+      this.speed = -this.speedMax;
+    }
+  }
+
+  var Sprite = function()
+  {
+    this.display = display;
+    this.x = Math.floor(this.display.width / 2 + misc.getRandomInt(-spacewidth, spacewidth));
+    this.y = Math.floor(this.display.height / 2 + misc.getRandomInt(-spaceheight, spaceheight));
+    this.radius = 0.01 * width;
+    this.speedX = new Speed();
+    this.speedY = new Speed();
+    this.oldX = this.x;
+    this.oldY = this.y;
+  }
+
+  Sprite.prototype.move = function()
+  {
+/*
+    this.speedX.check();
+    this.speedY.check();
+*/
+    this.oldX = this.x;
+    this.oldY = this.y;
+    this.x += this.speedX.speed;
+    this.y += this.speedY.speed;
+  }
+
+  Sprite.prototype.keepInCanvas = function()
+  {
+    if ((this.speedX.speed < 0 && this.x - this.radius <= 0) || (this.speedX.speed > 0 && this.x + this.radius >= this.display.width)) {
+      this.speedX.speed *= -1;
+    }
+    if ((this.speedY.speed < 0 && this.y - this.radius <= 0) || (this.speedY.speed > 0 && this.y + this.radius >= this.display.height)) {
+      this.speedY.speed *= -1;
+    }
+  }
+
+  Sprite.prototype.followSimple = function(targetX, targetY)
+  {
+    if (this.x > targetX) {
+      this.speedX.desc();
+    }
+    else if (this.x < targetX) {
+      this.speedX.inc();
+    }
+    if (this.y > targetY) {
+      this.speedY.desc();
+    }
+    else if (this.y < targetY) {
+      this.speedY.inc();
+    }
+  }
+
+  Sprite.prototype.draw = function(ctx)
+  {
+    ctx.beginPath();
+    ctx.lineWidth = 3;
+    ctx.fillStyle = 'rgba(255,255,255,.5)';
+    ctx.arc(this.x, this.y, this.radius, 0, fullCircle, true);
+    ctx.strokeStyle = 'rgba(0,0,0,.4)';
+    ctx.stroke();
+    ctx.fill();
+    ctx.closePath();
+  }
+
+  var sprites = new Array();
+
+  var run = function()
+  {
+    for (var i in sprites) {
+      sprites[i].move();
+      var neighborIndex = i == 0 ? maxSprites - 1 : i - 1;
+      var neighbor = sprites[neighborIndex];
+      if (misc.chance(60)) {
+        sprites[i].followSimple(display.width / 2 + misc.getRandomInt(-spacewidth, spacewidth), display.height / 2 + misc.getRandomInt(-spaceheight, spaceheight));
+      }
+      else {
+        sprites[i].followSimple(neighbor.x, neighbor.y);
+      }
+      sprites[i].keepInCanvas();
+      sprites[i].draw(display.ctx);
+    }
+  }
+
+  function nextframe()
+  {
+    display.clear();
+    run();
+    requestAnimFrame(nextframe);
+  }
+
+  function start()
+  {
+    for (i = 0; i < maxSprites; i++) {
+      sprites[i] = new Sprite();
+    }
+    nextframe();
+  }
+
+  window.addEventListener("load", start); 
+
+  </script>
+
+</body>
+</html>
